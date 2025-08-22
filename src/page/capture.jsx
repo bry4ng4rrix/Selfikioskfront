@@ -598,39 +598,9 @@ const Capture = () => {
               />
 
               {/* Toggle guides - Position absolue en haut à droite */}
-              <button
-                onClick={() => setShowGuides(!showGuides)}
-                className={`absolute top-3 right-3 p-2 rounded-lg transition-all z-10 ${
-                  showGuides 
-                    ? 'bg-green-500 hover:bg-green-600 text-white' 
-                    : 'bg-gray-600 hover:bg-gray-700 text-gray-200'
-                }`}
-                title={showGuides ? 'Masquer les guides' : 'Afficher les guides'}
-              >
-                <svg className='w-5 h-5' fill='currentColor' viewBox='0 0 20 20'>
-                  <path fillRule='evenodd' d='M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z' clipRule='evenodd' />
-                </svg>
-              </button>
-
+              
               {/* Informations de dimensionnement */}
-              {showGuides && !isCounting && (
-                <div className='absolute bottom-3 left-3 right-3 bg-black bg-opacity-70 rounded-lg p-3 z-10'>
-                  <div className='text-white text-center'>
-                    <p className='text-sm font-medium mb-1'>📏 Format: {CANVAS_WIDTH} × {CANVAS_HEIGHT}</p>
-                    <div className='flex items-center justify-center gap-4 text-xs'>
-                      <span className='flex items-center gap-1'>
-                        <div className='w-3 h-2 border border-white rounded-full bg-white bg-opacity-20'></div>
-                        Ovale centré
-                      </span>
-                      <span className='flex items-center gap-1'>
-                        <div className='w-3 h-1 bg-green-400 opacity-70'></div>
-                        Zone protégée
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
+             
               {/* Overlay de compteur */}
               {isCounting && (
                 <div className='absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 z-20'>

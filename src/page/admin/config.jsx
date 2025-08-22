@@ -15,8 +15,8 @@ export default function Dashboard() {
   const [smsTestResult, setSmsTestResult] = useState(null);
   const [showPasswords, setShowPasswords] = useState({});
   const [smsTestData, setSmsTestData] = useState({
-    capture_id: '',
-    phone: ''
+    capture_id: '44c3acab-df5e-4556-96d7-f442fd861f48',
+    phone: '+261383572066'
   });
 
   // Champs sensibles à masquer par défaut
@@ -75,7 +75,7 @@ export default function Dashboard() {
       if (!token) return;
 
       const response = await fetch('http://localhost:8000/admin/test/vps', {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -87,9 +87,17 @@ export default function Dashboard() {
         setVpsInfo(data);
       } else {
         console.error('Erreur lors du chargement des infos VPS');
+        setVpsInfo({
+          error: `Erreur ${response.status}`,
+          message: 'Impossible de tester la connectivité VPS'
+        });
       }
     } catch (error) {
       console.error('Erreur de connexion VPS:', error);
+      setVpsInfo({
+        error: 'Erreur de connexion',
+        message: 'Impossible de contacter le serveur'
+      });
     } finally {
       setIsTestingVps(false);
     }
@@ -190,7 +198,7 @@ export default function Dashboard() {
       }
 
       const response = await fetch('http://localhost:8000/admin/test/sms', {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -203,13 +211,13 @@ export default function Dashboard() {
       if (response.ok) {
         setSmsTestResult({
           success: true,
-          message: 'SMS envoyé avec succès !',
+          message: 'SMS test mis en file d\'attente avec succès !',
           data: result
         });
       } else {
         setSmsTestResult({
           success: false,
-          message: result.detail || 'Erreur lors de l\'envoi du SMS',
+          message: result.detail || 'Erreur lors de l\'envoi du SMS test',
           data: result
         });
       }
@@ -402,16 +410,23 @@ export default function Dashboard() {
                 </div>
               ) : vpsInfo ? (
                 <div className="space-y-3">
-                  {Object.entries(vpsInfo).map(([key, value]) => (
-                    <div key={key} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                      <span className="text-gray-600 text-sm font-medium">
-                        {formatFieldName(key)}
-                      </span>
-                      <span className="text-gray-900 text-sm font-mono bg-gray-50 px-2 py-1 rounded">
-                        {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                      </span>
+                  {vpsInfo.error ? (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <p className="text-red-800 text-sm font-medium">{vpsInfo.error}</p>
+                      <p className="text-red-600 text-xs mt-1">{vpsInfo.message}</p>
                     </div>
-                  ))}
+                  ) : (
+                    Object.entries(vpsInfo).map(([key, value]) => (
+                      <div key={key} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                        <span className="text-gray-600 text-sm font-medium">
+                          {formatFieldName(key)}
+                        </span>
+                        <span className="text-gray-900 text-sm font-mono bg-gray-50 px-2 py-1 rounded max-w-xs truncate">
+                          {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
@@ -443,8 +458,11 @@ export default function Dashboard() {
                     value={smsTestData.capture_id}
                     onChange={(e) => handleSmsTestChange('capture_id', e.target.value)}
                     placeholder="Ex: 44c3acab-df5e-4556-96d7-f442fd861f48"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-mono"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Un ID d'exemple est déjà rempli pour le test
+                  </p>
                 </div>
                 
                 <div>
@@ -458,6 +476,9 @@ export default function Dashboard() {
                     placeholder="Ex: +261383572066"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    📱 Format international recommandé (+33, +261, etc.)
+                  </p>
                 </div>
                 
                 <button
@@ -501,6 +522,11 @@ export default function Dashboard() {
                         }`}>
                           {smsTestResult.message}
                         </p>
+                        {smsTestResult.success && (
+                          <p className="text-green-600 text-xs mt-1">
+                            📱 Le SMS a été mis en file d'attente pour envoi
+                          </p>
+                        )}
                         {smsTestResult.data && (
                           <pre className="mt-2 text-xs bg-white p-2 rounded border overflow-x-auto">
                             {JSON.stringify(smsTestResult.data, null, 2)}
