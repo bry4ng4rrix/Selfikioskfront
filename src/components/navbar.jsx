@@ -4,7 +4,7 @@ import { useState ,React } from 'react';
 
 const Navbar = () => {
   return (
-    <div className='w-screen h-12 flex items-center justify-between bg-white p-2  '>
+    <div className='w-full h-12 flex items-center justify-between bg-white p-2  '>
       <div className="flex items-center gap-2"> 
             <AiFillCamera className="text-green-500 text-2xl"/>
             <h1>Selfikiosk</h1>

@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { AiOutlineCamera } from "react-icons/ai";
-import { Link, Navigate, useNavigate } from 'react-router';
 
 const Capture = () => {
   const videoRef = useRef(null);
@@ -14,23 +13,51 @@ const Capture = () => {
   const [selectedBackground, setSelectedBackground] = useState(null);
   const [backgroundImages, setBackgroundImages] = useState({});
   const [isBackgroundEnabled, setIsBackgroundEnabled] = useState(false);
+  const [apiBackgrounds, setApiBackgrounds] = useState([]);
 
-  const navigate = useNavigate();
-
-  // Fonds personnalisés prédéfinis
-  const backgrounds = [
-    { id: 1, name: 'Aucun', url: null },
-    { id: 2, name: 'Plage', url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1920&h=1080&fit=crop' },
-    { id: 3, name: 'Montagne', url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&h=1080&fit=crop' },
-    { id: 4, name: 'Ville', url: 'https://images.unsplash.com/photo-1449824913935-59a10b8d2000?w=1920&h=1080&fit=crop' },
-    { id: 5, name: 'Forêt', url: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&h=1080&fit=crop' },
-    { id: 6, name: 'Espace', url: 'https://images.unsplash.com/photo-1446776877081-d282a0f896e2?w=1920&h=1080&fit=crop' },
+  // Fonds prédéfinis par défaut
+  const defaultBackgrounds = [
+    { id: 'none', name: 'Aucun', url: null, type: 'default' }
   ];
+
+  // Charger les fonds d'écran depuis l'API
+  useEffect(() => {
+    const fetchBackgrounds = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/backgrounds');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Fonds d\'écran récupérés:', data);
+          
+          // Convertir l'objet en tableau et filtrer les éléments actifs
+          const backgroundsArray = Object.values(data)
+            .filter(bg => bg.is_active)
+            .map(bg => ({
+              id: bg.id,
+              name: bg.name,
+              url: `http://localhost:8000/${bg.file_path}`,
+              type: 'api'
+            }));
+          
+          setApiBackgrounds(backgroundsArray);
+        } else {
+          console.error('Erreur lors de la récupération des backgrounds');
+        }
+      } catch (error) {
+        console.error('Erreur de connexion:', error);
+      }
+    };
+
+    fetchBackgrounds();
+  }, []);
+
+  // Combiner tous les fonds d'écran
+  const allBackgrounds = [...defaultBackgrounds, ...apiBackgrounds];
 
   // Précharger toutes les images de fond au démarrage
   useEffect(() => {
     const preloadImages = async () => {
-      const imagePromises = backgrounds
+      const imagePromises = allBackgrounds
         .filter(bg => bg.url)
         .map(bg => {
           return new Promise((resolve) => {
@@ -50,8 +77,10 @@ const Capture = () => {
       setBackgroundImages(imageMap);
     };
 
-    preloadImages();
-  }, []);
+    if (allBackgrounds.length > 1) {
+      preloadImages();
+    }
+  }, [allBackgrounds.length]);
 
   // Fonction pour traiter le fond en temps réel
   const processFrame = useCallback(() => {
@@ -245,47 +274,135 @@ const Capture = () => {
   };
 
   return (
-    <div className='h-screen w-full flex justify-center items-center'>
-      <div className='bg-white w-3/4 h-4/5 flex-col justify-between flex p-5 rounded-xl shadow-lg'>
-        <div className="flex justify-between items-center">
-          <p className='text-2xl font-bold'>Capture de Selfie</p>
-          <Link to="/" className="bg-blue-600 hover:bg-blue-900 p-2 outline text-white px-3 rounded-lg flex items-center gap-2">Retour</Link>
+    <div className='min-h-screen w-full bg-gray-100 flex'>
+      {/* Sidebar pour les fonds d'écran */}
+      <div className='w-80 bg-white shadow-lg flex flex-col'>
+        {/* Header sidebar */}
+        <div className='p-4 border-b border-gray-200'>
+          <h2 className='text-lg font-semibold text-gray-800 mb-2'>Fonds d'écran</h2>
+          <p className='text-sm text-gray-600'>Choisissez un arrière-plan pour votre selfie</p>
         </div>
-        
-        <div className='relative bg-gray-500 p-5 h-full my-3 rounded-lg overflow-hidden'>
+
+        {/* Liste des fonds d'écran */}
+        <div className='flex-1 overflow-y-auto p-4'>
+          <div className='space-y-3'>
+            {allBackgrounds.map((bg) => (
+              <button
+                key={bg.id}
+                onClick={() => selectBackground(bg.url)}
+                className={`w-full relative overflow-hidden rounded-lg border-2 transition-all hover:scale-102 ${
+                  selectedBackground === bg.url ? 'border-blue-500 shadow-lg' : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                {bg.url ? (
+                  <>
+                    <div className='aspect-video w-full'>
+                      <img 
+                        src={bg.url} 
+                        alt={bg.name}
+                        className='w-full h-full object-cover'
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                      {/* Fallback en cas d'erreur */}
+                      <div className='w-full h-full bg-gray-300 hidden items-center justify-center'>
+                        <span className='text-gray-500 text-sm'>Image non disponible</span>
+                      </div>
+                    </div>
+                    {!backgroundImages[bg.url] && (
+                      <div className='absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center'>
+                        <div className='w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className='aspect-video w-full bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center'>
+                    <span className='text-white font-medium'>Pas de fond</span>
+                  </div>
+                )}
+                
+                {/* Nom du fond */}
+                <div className='p-3 text-left'>
+                  <p className='font-medium text-gray-800 truncate'>{bg.name}</p>
+                  {bg.type === 'api' && (
+                    <span className='inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full'>
+                      Personnalisé
+                    </span>
+                  )}
+                </div>
+
+                {/* Indicateur de sélection */}
+                {selectedBackground === bg.url && (
+                  <div className='absolute top-2 right-2 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center'>
+                    <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
+                      <path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' />
+                    </svg>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+          
+          {/* Message si pas de fonds personnalisés */}
+          {apiBackgrounds.length === 0 && (
+            <div className='mt-6 p-4 bg-gray-50 rounded-lg text-center'>
+              <p className='text-sm text-gray-500'>Aucun fond personnalisé disponible</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Zone principale */}
+      <div className='flex-1 flex flex-col'>
+        {/* Header principal */}
+        <div className='bg-white shadow-sm p-4 border-b border-gray-200'>
+          <div className='flex justify-between items-center'>
+            <h1 className='text-2xl font-bold text-gray-800'>Capture de Selfie</h1>
+            <a href="/" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+              Retour
+            </a>
+          </div>
+        </div>
+
+        {/* Contenu principal */}
+        <div className='flex-1 p-6'>
           {error ? (
-            <div className='text-white text-center p-4'>
-              <p>{error}</p>
+            <div className='h-full flex items-center justify-center'>
+              <div className='text-center p-8 bg-red-50 rounded-lg border border-red-200'>
+                <p className='text-red-800 font-medium'>{error}</p>
+              </div>
             </div>
           ) : photo ? (
             <div className='h-full flex flex-col items-center justify-center'>
-              <img 
-                src={photo} 
-                alt="Captured" 
-                className='max-h-full w-full rounded-lg object-contain'
-              />
-              <div className='mt-4 flex gap-4'>
-                <button
-                  onClick={retakePhoto}
-                  className='bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded'
-                >
-                  Reprendre
-                </button>
-                <button
-                  onClick={valider}
-                  className='bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded'
-                >
-                  Valider
-                </button>
+              <div className='bg-white p-4 rounded-lg shadow-lg max-w-4xl w-full'>
+                <img 
+                  src={photo} 
+                  alt="Captured" 
+                  className='w-full max-h-96 object-contain rounded-lg'
+                />
+                <div className='mt-6 flex gap-4 justify-center'>
+                  <button
+                    onClick={retakePhoto}
+                    className='bg-red-500 hover:bg-red-600 text-white font-medium py-3 px-6 rounded-lg transition-colors'
+                  >
+                    Reprendre
+                  </button>
+                  <button
+                    onClick={valider}
+                    className='bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-6 rounded-lg transition-colors'
+                  >
+                    Valider
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
-            <div className='h-full w-full flex flex-col items-center justify-between'>
-             
-
-              {/* Zone vidéo */}
-              <div className='w-full h-full flex items-center justify-center overflow-hidden relative'>
-                {/* Vidéo originale (toujours cachée maintenant) */}
+            <div className='h-full flex flex-col'>
+              {/* Zone de prévisualisation vidéo */}
+              <div className='flex-1 bg-gray-900 rounded-lg overflow-hidden relative flex items-center justify-center'>
+                {/* Vidéo cachée */}
                 <video
                   ref={videoRef}
                   autoPlay
@@ -294,106 +411,46 @@ const Capture = () => {
                   className='hidden'
                 />
                 
-                {/* Canvas qui affiche toujours le résultat */}
+                {/* Canvas de rendu */}
                 <canvas
                   ref={canvasRef}
-                  className='h-full w-auto max-w-full object-cover lg:object-contain rounded-lg'
+                  className='max-h-full max-w-full object-contain'
                 />
 
-                {/* Compteur */}
+                {/* Overlay de compteur */}
                 {isCounting && (
-                  <div className='absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-10'>
-                    <div className='text-white text-9xl font-bold'>{countdown}</div>
+                  <div className='absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-20'>
+                    <div className='text-white text-8xl font-bold animate-pulse'>
+                      {countdown}
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Contrôles de capture */}
-              <div className='w-full flex flex-col items-center gap-4 pb-4'>
+              <div className='mt-6 flex flex-col items-center gap-6'>
+                {/* Bouton principal de capture */}
                 <button
                   onClick={() => capturePhoto(0)}
-                  className='bg-white rounded-full p-4 m-1 shadow-lg hover:bg-gray-200 transition-colors'
-                  aria-label="Prendre une photo"
+                  className='bg-white rounded-full p-6 shadow-lg hover:shadow-xl transition-shadow disabled:opacity-50'
+                  aria-label="Prendre une photo instantanée"
                   disabled={isCounting}
                 >
-                  <AiOutlineCamera className='text-2xl' />
+                  <AiOutlineCamera className='text-4xl text-gray-700' />
                 </button>
 
-
-
-
-
-
-
- {/* Sélection des fonds en haut */}
- <div className='w-full mb-4'>
-                <div className='flex gap-2 justify-center flex-wrap'>
-                  {backgrounds.map((bg) => (
+                {/* Boutons de temporisation */}
+                <div className='flex gap-4'>
+                  {[3, 5, 10].map((seconds) => (
                     <button
-                      key={bg.id}
-                      onClick={() => selectBackground(bg.url)}
-                      className={`relative overflow-hidden rounded-lg border-2 transition-all ${
-                        selectedBackground === bg.url ? 'border-blue-400 scale-105' : 'border-white hover:border-gray-300'
-                      }`}
+                      key={seconds}
+                      onClick={() => capturePhoto(seconds)}
+                      className='bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50'
+                      disabled={isCounting}
                     >
-                      {bg.url ? (
-                        <>
-                          <img 
-                            src={bg.url} 
-                            alt={bg.name}
-                            className='w-16 h-12 object-cover'
-                          />
-                          {!backgroundImages[bg.url] && (
-                            <div className='absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center'>
-                              <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className='w-16 h-12 bg-gray-600 flex items-center justify-center'>
-                          <span className='text-white text-xs'>Original</span>
-                        </div>
-                      )}
-                      <div className='absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-1 text-center'>
-                        {bg.name}
-                      </div>
+                      {seconds}s
                     </button>
                   ))}
-                </div>
-              </div>
-
-
-
-
-
-
-
-
-
-
-                <div className='flex gap-2'>
-                  <button
-                    onClick={() => capturePhoto(3)}
-                    className='bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded'
-                    disabled={isCounting}
-                  >
-                    3s
-                  </button>
-                  <button
-                    onClick={() => capturePhoto(5)}
-                    className='bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded'
-                    disabled={isCounting}
-                  >
-                    5s
-                  </button>
-                  <button
-                    onClick={() => capturePhoto(10)}
-                    className='bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded'
-                    disabled={isCounting}
-                  >
-                    10s
-                  </button>
-                  
                 </div>
               </div>
             </div>

@@ -3,19 +3,32 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './page/home'
 import Capture from './page/capture'
 import Navbar from './components/navbar'
-import Admin from './page/admin/index'
+import Login from './page/admin/login'
+import Protected from './page/admin/protected';
+import Admin from './page/admin/home'
+import Fonds from './page/admin/fonds';
 function App() {
   
 
   return (
     <BrowserRouter >
-      <div className="min-h-screen  bg-blue-100 text-gray-800">
-        <Navbar />
+      <div className="min-h-screen w-full h-screen bg-blue-100 text-gray-800">
+               <Navbar />
+       
         <Routes>
-             <Route path="/" element={<Home />} />
-             <Route path="/capture" element={<Capture/>} />
-             <Route path="/admin" element={<Admin/>} />
+             
+              <Route path="/" element={<Home />} />
+              <Route path="/capture" element={<Capture/>} />
+              <Route path="/admin/login" element={<Login/>} />
+
+
+             <Route element={<Protected/>}>
+                <Route path='/admin' element={<Admin/>} /> 
+                <Route path='/admin/Fonds' element={<Fonds/>} /> 
+
+             </Route> 
         </Routes>
+        
       </div>
     
     </BrowserRouter>
