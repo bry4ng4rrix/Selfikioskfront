@@ -253,8 +253,8 @@ export default function Dashboard() {
        <div className="bg-gray-50 border border-dashed border-gray-700 rounded-lg p-1 mb-6 grid grid-cols-4 gap-2 items-center justify-center">
           <a href="/admin" className="bg-blue-300 h-10 rounded-lg hover:bg-blue-200 justify-center items-center flex">Vue ensemble</a>
           <a href="/admin/fonds" className="bg-white h-10 rounded-lg hover:bg-blue-200 justify-center items-center flex">Fonds</a>
+          <a href="/admin/capture" className="bg-white h-10 rounded-lg hover:bg-blue-200 justify-center items-center flex">Capture</a>
           <a href="/admin/config" className="bg-white h-10 rounded-lg hover:bg-blu-200 justify-center items-center flex">Configuration</a>
-          <a href="/admin/donne" className="bg-white h-10 rounded-lg hover:bg-blue-200 justify-center items-center flex">Données</a>
         </div>
 
         {/* Error Banner */}

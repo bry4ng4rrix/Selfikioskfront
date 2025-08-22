@@ -7,6 +7,8 @@ import Login from './page/admin/login'
 import Protected from './page/admin/protected';
 import Admin from './page/admin/home'
 import Fonds from './page/admin/fonds';
+import Captures from './page/admin/capture';
+import Config from './page/admin/config';
 function App() {
   
 
@@ -25,6 +27,8 @@ function App() {
              <Route element={<Protected/>}>
                 <Route path='/admin' element={<Admin/>} /> 
                 <Route path='/admin/Fonds' element={<Fonds/>} /> 
+                <Route path='/admin/Capture' element={<Captures/>} /> 
+                <Route path='/admin/config' element={<Config/>} /> 
 
              </Route> 
         </Routes>

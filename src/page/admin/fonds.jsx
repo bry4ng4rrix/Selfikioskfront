@@ -254,21 +254,14 @@ export default function Dashboard() {
         <div className="bg-gray-50 border border-dashed border-gray-700 rounded-lg p-1 mb-6 grid grid-cols-4 gap-2 items-center justify-center">
           <a href="/admin" className="bg-white h-10 rounded-lg hover:bg-blue-200 justify-center items-center flex">Vue ensemble</a>
           <a href="/admin/fonds" className="bg-blue-300 h-10 rounded-lg hover:bg-blue-500 justify-center items-center flex">Fonds</a>
+          <a href="/admin/capture" className="bg-white h-10 rounded-lg hover:bg-blue-200 justify-center items-center flex">Capture</a>
           <a href="/admin/config" className="bg-white h-10 rounded-lg hover:bg-blue-200 justify-center items-center flex">Configuration</a>
-          <a href="/admin/donne" className="bg-white h-10 rounded-lg hover:bg-blue-200 justify-center items-center flex">Données</a>
         </div>
 
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Gestion des fonds d'écran</h1>
-          <button
-            onClick={openFileDialog}
-            disabled={isLoading}
-            className="bg-gray-900 hover:bg-gray-800 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            {isLoading ? 'Chargement...' : 'Ajouter un fond'}
-          </button>
+         
         </div>
 
         {/* Drag and Drop Zone */}
@@ -384,12 +377,8 @@ export default function Dashboard() {
                     <Trash2 className="w-4 h-4" />
                   </button>
                   
-                  {/* Status Badge */}
-                  {wallpaper.is_active && (
-                    <div className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
-                      Actif
-                    </div>
-                  )}
+                 
+                 
                 </div>
                 
                 {/* Wallpaper Info */}

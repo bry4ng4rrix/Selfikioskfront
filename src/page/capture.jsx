@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { AiOutlineCamera } from "react-icons/ai";
+import { Camera } from "lucide-react";
 
 const Capture = () => {
   const videoRef = useRef(null);
@@ -14,6 +14,16 @@ const Capture = () => {
   const [backgroundImages, setBackgroundImages] = useState({});
   const [isBackgroundEnabled, setIsBackgroundEnabled] = useState(false);
   const [apiBackgrounds, setApiBackgrounds] = useState([]);
+  const [showGuides, setShowGuides] = useState(true);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [formData, setFormData] = useState({ phone: '', email: '' });
+  const [isSaving, setIsSaving] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Dimensions standards pour le canvas
+  const CANVAS_WIDTH = 1200;
+  const CANVAS_HEIGHT = 800;
 
   // Fonds prédéfinis par défaut
   const defaultBackgrounds = [
@@ -82,7 +92,7 @@ const Capture = () => {
     }
   }, [allBackgrounds.length]);
 
-  // Fonction pour traiter le fond en temps réel
+  // Fonction pour traiter le fond en temps réel avec détection améliorée
   const processFrame = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) {
       if (animationRef.current) {
@@ -97,17 +107,15 @@ const Capture = () => {
 
     // Vérifier si la vidéo est prête
     if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
-      // S'assurer que le canvas a les bonnes dimensions
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }
+      // Définir des dimensions fixes pour le canvas
+      canvas.width = CANVAS_WIDTH;
+      canvas.height = CANVAS_HEIGHT;
 
       if (isBackgroundEnabled && selectedBackground && backgroundImages[selectedBackground]) {
         // Mode avec fond personnalisé
         const backgroundImg = backgroundImages[selectedBackground];
         
-        // Dessiner le fond personnalisé
+        // Dessiner le fond personnalisé redimensionné pour correspondre au canvas
         ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
 
         // Créer un canvas temporaire pour traiter l'image de la vidéo
@@ -116,25 +124,74 @@ const Capture = () => {
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
         
-        // Dessiner l'image de la vidéo
-        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        // Calculer le ratio pour adapter la vidéo au canvas en gardant les proportions
+        const videoRatio = video.videoWidth / video.videoHeight;
+        const canvasRatio = canvas.width / canvas.height;
+        
+        let drawWidth, drawHeight, offsetX, offsetY;
+        
+        if (videoRatio > canvasRatio) {
+          // Vidéo plus large : ajuster sur la hauteur
+          drawHeight = canvas.height;
+          drawWidth = drawHeight * videoRatio;
+          offsetX = (canvas.width - drawWidth) / 2;
+          offsetY = 0;
+        } else {
+          // Vidéo plus haute : ajuster sur la largeur
+          drawWidth = canvas.width;
+          drawHeight = drawWidth / videoRatio;
+          offsetX = 0;
+          offsetY = (canvas.height - drawHeight) / 2;
+        }
+        
+        // Dessiner l'image de la vidéo redimensionnée et centrée
+        tempCtx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
         
         // Obtenir les données d'image
         const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
         const data = imageData.data;
 
-        // Algorithme simple de suppression de fond
+        // Algorithme de suppression de fond amélioré
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
           
-          // Détection simple des couleurs de fond à supprimer
-          const isBackground = (
-            (r > 200 && g > 200 && b > 200) || // Blanc
-            (r < 50 && g < 50 && b < 50) || // Noir/très sombre
-            (Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30 && r > 150) // Gris clair
+          // Calculer la position du pixel
+          const pixelIndex = Math.floor(i / 4);
+          const x = pixelIndex % canvas.width;
+          const y = Math.floor(pixelIndex / canvas.width);
+          
+          // Zones de bords plus agressives
+          const isEdgeZone = (
+            x < canvas.width * 0.1 ||
+            x > canvas.width * 0.9 ||
+            y < canvas.height * 0.1 ||
+            y > canvas.height * 0.9
           );
+          
+          // Détection de couleur de fond améliorée
+          let isBackground = false;
+          
+          if (isEdgeZone) {
+            // Zones de bords - détection plus agressive
+            isBackground = (
+              (r > 180 && g > 180 && b > 180) || // Blanc/gris clair
+              (r < 60 && g < 60 && b < 60) || // Noir/très sombre
+              (Math.abs(r - g) < 40 && Math.abs(g - b) < 40 && Math.abs(r - b) < 40) // Couleurs uniformes
+            );
+          } else {
+            // Zones normales - détection standard
+            isBackground = (
+              (r > 200 && g > 200 && b > 200) || // Blanc
+              (r < 40 && g < 40 && b < 40) || // Noir/très sombre
+              (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25 && r > 160) || // Gris clair
+              // Détection de vert (green screen)
+              (g > r + 50 && g > b + 50 && g > 100) ||
+              // Détection de bleu (blue screen)
+              (b > r + 50 && b > g + 50 && b > 100)
+            );
+          }
 
           if (isBackground) {
             data[i + 3] = 0; // Rendre transparent
@@ -147,14 +204,101 @@ const Capture = () => {
         // Dessiner l'image traitée sur le canvas principal
         ctx.drawImage(tempCanvas, 0, 0);
       } else {
-        // Mode vidéo normale (copier la vidéo sur le canvas)
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Mode vidéo normale - adapter la vidéo au canvas
+        const videoRatio = video.videoWidth / video.videoHeight;
+        const canvasRatio = canvas.width / canvas.height;
+        
+        let drawWidth, drawHeight, offsetX, offsetY;
+        
+        if (videoRatio > canvasRatio) {
+          // Vidéo plus large : ajuster sur la hauteur
+          drawHeight = canvas.height;
+          drawWidth = drawHeight * videoRatio;
+          offsetX = (canvas.width - drawWidth) / 2;
+          offsetY = 0;
+        } else {
+          // Vidéo plus haute : ajuster sur la largeur
+          drawWidth = canvas.width;
+          drawHeight = drawWidth / videoRatio;
+          offsetX = 0;
+          offsetY = (canvas.height - drawHeight) / 2;
+        }
+        
+        // Remplir d'abord le canvas en noir pour les zones non couvertes
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Dessiner la vidéo redimensionnée et centrée
+        ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
+      }
+      
+      // Dessiner les guides visuels par-dessus
+      if (showGuides) {
+        drawGuides(ctx, canvas.width, canvas.height);
       }
     }
 
     // Continuer l'animation
     animationRef.current = requestAnimationFrame(processFrame);
-  }, [isBackgroundEnabled, selectedBackground, backgroundImages]);
+  }, [isBackgroundEnabled, selectedBackground, backgroundImages, showGuides]);
+
+  // Fonction pour dessiner les guides visuels
+  const drawGuides = (ctx, width, height) => {
+    ctx.save();
+    
+    // Guide de positionnement du visage (ovale central parfaitement centré)
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const radiusX = width * 0.12; // Réduire légèrement pour un meilleur centrage visuel
+    const radiusY = height * 0.18;
+    
+    // Ovale pour le visage - parfaitement centré
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([15, 10]);
+    ctx.stroke();
+    
+    // Grille de règle des tiers (subtile)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 12]);
+    
+    // Lignes verticales
+    ctx.beginPath();
+    ctx.moveTo(width / 3, 0);
+    ctx.lineTo(width / 3, height);
+    ctx.moveTo(2 * width / 3, 0);
+    ctx.lineTo(2 * width / 3, height);
+    ctx.stroke();
+    
+    // Lignes horizontales
+    ctx.beginPath();
+    ctx.moveTo(0, height / 3);
+    ctx.lineTo(width, height / 3);
+    ctx.moveTo(0, 2 * height / 3);
+    ctx.lineTo(width, 2 * height / 3);
+    ctx.stroke();
+    
+    // Instructions de positionnement
+    if (!isCounting) {
+      // Texte principal - centré
+      ctx.font = `${Math.max(16, width * 0.025)}px Arial, sans-serif`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Centrez votre visage dans l\'ovale', centerX, centerY + radiusY + 40);
+      
+      // Point central de référence
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 3, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    
+    ctx.restore();
+  };
 
   useEffect(() => {
     // Démarrer la caméra au chargement du composant
@@ -162,8 +306,8 @@ const Capture = () => {
       try {
         const mediaStream = await navigator.mediaDevices.getUserMedia({ 
           video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
             facingMode: "user"
           },
           audio: false
@@ -193,7 +337,7 @@ const Capture = () => {
 
   // Démarrer le traitement des frames quand la vidéo est prête
   useEffect(() => {
-    if (videoRef.current) {
+    if (videoRef.current && stream) {
       const startProcessing = () => {
         if (animationRef.current) {
           cancelAnimationFrame(animationRef.current);
@@ -218,7 +362,7 @@ const Capture = () => {
         }
       };
     }
-  }, [processFrame]);
+  }, [processFrame, stream]);
 
   const startCountdown = (seconds) => {
     if (isCounting) return;
@@ -242,7 +386,7 @@ const Capture = () => {
   const takePhoto = () => {
     // Toujours utiliser le canvas qui affiche l'effet en cours
     if (canvasRef.current) {
-      const photoUrl = canvasRef.current.toDataURL('image/jpeg');
+      const photoUrl = canvasRef.current.toDataURL('image/jpeg', 0.9);
       setPhoto(photoUrl);
     }
   };
@@ -270,193 +414,543 @@ const Capture = () => {
   };
 
   const valider = async (e) => {
-    console.log("Photo finale:", photo);
+    console.log("Ouverture du modal de validation");
+    // Générer un QR code avec un lien vers la photo (simulé pour l'exemple)
+    const qrData = `https://selfie.example.com/photo/${Date.now()}`;
+    setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`);
+    setShowValidationModal(true);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!formData.phone && !formData.email) {
+      alert('Veuillez renseigner au moins un numéro de téléphone ou un email');
+      return;
+    }
+
+    setIsSaving(true);
+    
+    try {
+      // Trouver l'ID du background sélectionné
+      let backgroundId = null;
+      if (selectedBackground) {
+        const selectedBg = allBackgrounds.find(bg => bg.url === selectedBackground);
+        backgroundId = selectedBg ? selectedBg.id : null;
+      }
+
+      // Préparer les données à envoyer
+      const captureData = {
+        photo_base64: photo.split(',')[1], // Enlever le préfixe data:image/jpeg;base64,
+        phone: formData.phone || '',
+        email: formData.email || '',
+        background_id: backgroundId || ''
+      };
+
+      console.log('Envoi des données:', { ...captureData, photo_base64: 'base64_truncated...' });
+
+      // 1. Sauvegarder la capture
+      const response = await fetch('http://localhost:8000/api/capture', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(captureData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Sauvegarde réussie:', result);
+        
+        // 2. Envoyer le SMS si un numéro de téléphone est fourni
+        if (formData.phone && result.id) {
+          console.log('Envoi du SMS...');
+          
+          try {
+            const smsResponse = await fetch('http://localhost:8000/api/send-sms', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                capture_id: result.id,
+                phone: formData.phone
+              }),
+            });
+
+            if (smsResponse.ok) {
+              const smsResult = await smsResponse.json();
+              console.log('SMS envoyé avec succès:', smsResult);
+            } else {
+              const smsError = await smsResponse.text();
+              console.error('Erreur envoi SMS:', smsResponse.status, smsError);
+              // On continue même si le SMS échoue
+            }
+          } catch (smsError) {
+            console.error('Erreur de connexion SMS:', smsError);
+            // On continue même si le SMS échoue
+          }
+        }
+        
+        setSaveSuccess(true);
+        
+        // Fermer le modal après 2 secondes et réinitialiser
+        setTimeout(() => {
+          setShowValidationModal(false);
+          setFormData({ phone: '', email: '' });
+          setPhoto(null);
+          setSaveSuccess(false);
+        }, 2000);
+      } else {
+        const errorText = await response.text();
+        console.error('Erreur de sauvegarde:', response.status, errorText);
+        alert('Erreur lors de la sauvegarde. Veuillez réessayer.');
+      }
+    } catch (error) {
+      console.error('Erreur de connexion:', error);
+      alert('Erreur de connexion. Vérifiez votre réseau.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const closeModal = () => {
+    if (!isSaving) {
+      setShowValidationModal(false);
+      setFormData({ phone: '', email: '' });
+      setSaveSuccess(false);
+    }
   };
 
   return (
-    <div className='min-h-screen w-full bg-gray-100 flex'>
-      {/* Sidebar pour les fonds d'écran */}
-      <div className='w-80 bg-white shadow-lg flex flex-col'>
-        {/* Header sidebar */}
-        <div className='p-4 border-b border-gray-200'>
-          <h2 className='text-lg font-semibold text-gray-800 mb-2'>Fonds d'écran</h2>
-          <p className='text-sm text-gray-600'>Choisissez un arrière-plan pour votre selfie</p>
+    <div className='min-h-screen w-full bg-gray-100 flex flex-col'>
+      {/* Header compact */}
+      <div className='bg-white shadow-sm p-3 border-b border-gray-200 flex-shrink-0'>
+        <div className='flex justify-between items-center'>
+          <h1 className='text-lg font-bold text-gray-800'>📸 Selfie</h1>
+          <a href="/" className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-medium transition-colors text-sm">
+            ← Retour
+          </a>
         </div>
+      </div>
 
-        {/* Liste des fonds d'écran */}
-        <div className='flex-1 overflow-y-auto p-4'>
-          <div className='space-y-3'>
-            {allBackgrounds.map((bg) => (
+      {/* Contenu principal - Priorité à la caméra */}
+      <div className='flex-1 flex flex-col overflow-hidden'>
+        
+        {error ? (
+          <div className='flex-1 flex items-center justify-center p-4'>
+            <div className='text-center p-4 bg-red-50 rounded-lg border border-red-200 w-full max-w-sm'>
+              <p className='text-red-800 font-medium text-sm'>{error}</p>
+            </div>
+          </div>
+        ) : photo ? (
+          <div className='flex-1 flex flex-col items-center justify-center p-4'>
+            <div className='bg-white p-3 rounded-lg shadow-lg w-full max-w-sm'>
+              <img 
+                src={photo} 
+                alt="Captured" 
+                className='w-full h-auto rounded-lg'
+              />
+              <div className='mt-4 flex gap-3 justify-center'>
+                <button
+                  onClick={retakePhoto}
+                  className='bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm flex-1'
+                >
+                  🔄 Reprendre
+                </button>
+                <button
+                  onClick={valider}
+                  className='bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm flex-1'
+                >
+                  ✅ Valider
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Zone caméra - Prend la majorité de l'espace */}
+            <div className='flex-1 bg-gray-900 relative flex items-center justify-center overflow-hidden min-h-[40vh]'>
+              {/* Vidéo cachée */}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className='hidden'
+              />
+              
+              {/* Canvas de rendu avec dimensions fixes */}
+              <canvas
+                ref={canvasRef}
+                width={CANVAS_WIDTH}
+                height={CANVAS_HEIGHT}
+                className='max-h-full max-w-full object-contain border border-gray-600 rounded-lg'
+                style={{
+                  aspectRatio: `${CANVAS_WIDTH}/${CANVAS_HEIGHT}`
+                }}
+              />
+
+              {/* Toggle guides - Position absolue en haut à droite */}
               <button
-                key={bg.id}
-                onClick={() => selectBackground(bg.url)}
-                className={`w-full relative overflow-hidden rounded-lg border-2 transition-all hover:scale-102 ${
-                  selectedBackground === bg.url ? 'border-blue-500 shadow-lg' : 'border-gray-200 hover:border-blue-300'
+                onClick={() => setShowGuides(!showGuides)}
+                className={`absolute top-3 right-3 p-2 rounded-lg transition-all z-10 ${
+                  showGuides 
+                    ? 'bg-green-500 hover:bg-green-600 text-white' 
+                    : 'bg-gray-600 hover:bg-gray-700 text-gray-200'
                 }`}
+                title={showGuides ? 'Masquer les guides' : 'Afficher les guides'}
               >
-                {bg.url ? (
-                  <>
-                    <div className='aspect-video w-full'>
-                      <img 
-                        src={bg.url} 
-                        alt={bg.name}
-                        className='w-full h-full object-cover'
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
-                      />
-                      {/* Fallback en cas d'erreur */}
-                      <div className='w-full h-full bg-gray-300 hidden items-center justify-center'>
-                        <span className='text-gray-500 text-sm'>Image non disponible</span>
-                      </div>
+                <svg className='w-5 h-5' fill='currentColor' viewBox='0 0 20 20'>
+                  <path fillRule='evenodd' d='M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z' clipRule='evenodd' />
+                </svg>
+              </button>
+
+              {/* Informations de dimensionnement */}
+              {showGuides && !isCounting && (
+                <div className='absolute bottom-3 left-3 right-3 bg-black bg-opacity-70 rounded-lg p-3 z-10'>
+                  <div className='text-white text-center'>
+                    <p className='text-sm font-medium mb-1'>📏 Format: {CANVAS_WIDTH} × {CANVAS_HEIGHT}</p>
+                    <div className='flex items-center justify-center gap-4 text-xs'>
+                      <span className='flex items-center gap-1'>
+                        <div className='w-3 h-2 border border-white rounded-full bg-white bg-opacity-20'></div>
+                        Ovale centré
+                      </span>
+                      <span className='flex items-center gap-1'>
+                        <div className='w-3 h-1 bg-green-400 opacity-70'></div>
+                        Zone protégée
+                      </span>
                     </div>
-                    {!backgroundImages[bg.url] && (
-                      <div className='absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center'>
-                        <div className='w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className='aspect-video w-full bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center'>
-                    <span className='text-white font-medium'>Pas de fond</span>
                   </div>
-                )}
-                
-                {/* Nom du fond */}
-                <div className='p-3 text-left'>
-                  <p className='font-medium text-gray-800 truncate'>{bg.name}</p>
-                  {bg.type === 'api' && (
-                    <span className='inline-block mt-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full'>
-                      Personnalisé
-                    </span>
+                </div>
+              )}
+
+              {/* Overlay de compteur */}
+              {isCounting && (
+                <div className='absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 z-20'>
+                  <div className='text-white text-6xl font-bold animate-pulse'>
+                    {countdown}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Contrôles de capture - Zone fixe en bas */}
+            <div className='bg-white border-t border-gray-200 p-4 flex-shrink-0'>
+              {/* Section principale avec bouton capture et fonds d'écran */}
+              <div className='flex items-center justify-center gap-4 mb-4'>
+                {/* Fonds d'écran à gauche */}
+                <div className='flex-1 max-w-xs'>
+                  <p className='text-xs text-gray-500 mb-2 text-center'>🎨 Fonds personnalisé</p>
+                  <div className='flex gap-2 justify-center overflow-x-auto pb-1'>
+                    {allBackgrounds.slice(0, 4).map((bg) => (
+                      <button
+                        key={bg.id}
+                        onClick={() => selectBackground(bg.url)}
+                        className={`relative overflow-hidden rounded-lg border-2 transition-all flex-shrink-0 ${
+                          selectedBackground === bg.url ? 'border-blue-500 shadow-lg scale-110' : 'border-gray-300 hover:border-blue-300'
+                        }`}
+                      >
+                        {bg.url ? (
+                          <>
+                            <div className='w-12 h-9'>
+                              <img 
+                                src={bg.url} 
+                                alt={bg.name}
+                                className='w-full h-full object-cover'
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                              {/* Fallback en cas d'erreur */}
+                              <div className='w-full h-full bg-gray-300 hidden items-center justify-center'>
+                                <span className='text-gray-500 text-xs'>❌</span>
+                              </div>
+                            </div>
+                            {!backgroundImages[bg.url] && (
+                              <div className='absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center'>
+                                <div className='w-2 h-2 border border-white border-t-transparent rounded-full animate-spin'></div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className='w-12 h-9 bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center'>
+                            <span className='text-white text-xs'>🚫</span>
+                          </div>
+                        )}
+                        
+                        {/* Badge API */}
+                        {bg.type === 'api' && (
+                          <div className='absolute -top-1 -right-1 bg-blue-500 text-white text-xs px-1 rounded-full w-4 h-4 flex items-center justify-center'>
+                            <span className='text-xs font-bold'>•</span>
+                          </div>
+                        )}
+
+                        {/* Indicateur de sélection */}
+                        {selectedBackground === bg.url && (
+                          <div className='absolute -top-1 -left-1 bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center'>
+                            <svg className='w-2 h-2' fill='currentColor' viewBox='0 0 20 20'>
+                              <path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' />
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                    
+                    {/* Bouton "Plus" si plus de 4 fonds */}
+                    {allBackgrounds.length > 4 && (
+                      <button
+                        onClick={() => {
+                          const content = document.getElementById('more-backgrounds');
+                          if (content.style.display === 'none' || !content.style.display) {
+                            content.style.display = 'flex';
+                          } else {
+                            content.style.display = 'none';
+                          }
+                        }}
+                        className='w-12 h-9 bg-gray-100 hover:bg-gray-200 border-2 border-gray-300 rounded-lg flex items-center justify-center transition-colors'
+                      >
+                        <span className='text-gray-600 text-xs'>+{allBackgrounds.length - 4}</span>
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Fonds supplémentaires (cachés par défaut) */}
+                  {allBackgrounds.length > 4 && (
+                    <div id="more-backgrounds" className='hidden gap-2 justify-center mt-2 overflow-x-auto pb-1'>
+                      {allBackgrounds.slice(4).map((bg) => (
+                        <button
+                          key={bg.id}
+                          onClick={() => selectBackground(bg.url)}
+                          className={`relative overflow-hidden rounded-lg border-2 transition-all flex-shrink-0 ${
+                            selectedBackground === bg.url ? 'border-blue-500 shadow-lg scale-110' : 'border-gray-300 hover:border-blue-300'
+                          }`}
+                        >
+                          {bg.url ? (
+                            <>
+                              <div className='w-12 h-9'>
+                                <img 
+                                  src={bg.url} 
+                                  alt={bg.name}
+                                  className='w-full h-full object-cover'
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                                <div className='w-full h-full bg-gray-300 hidden items-center justify-center'>
+                                  <span className='text-gray-500 text-xs'>❌</span>
+                                </div>
+                              </div>
+                              {!backgroundImages[bg.url] && (
+                                <div className='absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center'>
+                                  <div className='w-2 h-2 border border-white border-t-transparent rounded-full animate-spin'></div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className='w-12 h-9 bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center'>
+                              <span className='text-white text-xs'>🚫</span>
+                            </div>
+                          )}
+                          
+                          {bg.type === 'api' && (
+                            <div className='absolute -top-1 -right-1 bg-blue-500 text-white text-xs px-1 rounded-full w-4 h-4 flex items-center justify-center'>
+                              <span className='text-xs font-bold'>•</span>
+                            </div>
+                          )}
+
+                          {selectedBackground === bg.url && (
+                            <div className='absolute -top-1 -left-1 bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center'>
+                              <svg className='w-2 h-2' fill='currentColor' viewBox='0 0 20 20'>
+                                <path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' />
+                              </svg>
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
-                {/* Indicateur de sélection */}
-                {selectedBackground === bg.url && (
-                  <div className='absolute top-2 right-2 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center'>
-                    <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 20 20'>
-                      <path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' />
-                    </svg>
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-          
-          {/* Message si pas de fonds personnalisés */}
-          {apiBackgrounds.length === 0 && (
-            <div className='mt-6 p-4 bg-gray-50 rounded-lg text-center'>
-              <p className='text-sm text-gray-500'>Aucun fond personnalisé disponible</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Zone principale */}
-      <div className='flex-1 flex flex-col'>
-        {/* Header principal */}
-        <div className='bg-white shadow-sm p-4 border-b border-gray-200'>
-          <div className='flex justify-between items-center'>
-            <h1 className='text-2xl font-bold text-gray-800'>Capture de Selfie</h1>
-            <a href="/" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-              Retour
-            </a>
-          </div>
-        </div>
-
-        {/* Contenu principal */}
-        <div className='flex-1 p-6'>
-          {error ? (
-            <div className='h-full flex items-center justify-center'>
-              <div className='text-center p-8 bg-red-50 rounded-lg border border-red-200'>
-                <p className='text-red-800 font-medium'>{error}</p>
-              </div>
-            </div>
-          ) : photo ? (
-            <div className='h-full flex flex-col items-center justify-center'>
-              <div className='bg-white p-4 rounded-lg shadow-lg max-w-4xl w-full'>
-                <img 
-                  src={photo} 
-                  alt="Captured" 
-                  className='w-full max-h-96 object-contain rounded-lg'
-                />
-                <div className='mt-6 flex gap-4 justify-center'>
+                {/* Bouton principal de capture - au centre */}
+                <div className='flex-shrink-0'>
                   <button
-                    onClick={retakePhoto}
-                    className='bg-red-500 hover:bg-red-600 text-white font-medium py-3 px-6 rounded-lg transition-colors'
+                    onClick={() => capturePhoto(0)}
+                    className='bg-blue-600 hover:bg-blue-700 rounded-full p-4 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:scale-95'
+                    aria-label="Prendre une photo instantanée"
+                    disabled={isCounting}
                   >
-                    Reprendre
-                  </button>
-                  <button
-                    onClick={valider}
-                    className='bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-6 rounded-lg transition-colors'
-                  >
-                    Valider
+                    <Camera className='w-8 h-8 text-white' />
                   </button>
                 </div>
+
+                {/* Espace équilibré à droite */}
+                <div className='flex-1 max-w-xs flex justify-center'>
+                  <div className='text-center'>
+                    
+                  </div>
+                </div>
+              </div>
+
+              {/* Boutons de temporisation */}
+              <div className='flex justify-center gap-2'>
+                {[3, 5, 10].map((seconds) => (
+                  <button
+                    key={seconds}
+                    onClick={() => capturePhoto(seconds)}
+                    className='bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 text-sm flex-1'
+                    disabled={isCounting}
+                  >
+                    ⏱️ {seconds}s
+                  </button>
+                ))}
               </div>
             </div>
-          ) : (
-            <div className='h-full flex flex-col'>
-              {/* Zone de prévisualisation vidéo */}
-              <div className='flex-1 bg-gray-900 rounded-lg overflow-hidden relative flex items-center justify-center'>
-                {/* Vidéo cachée */}
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className='hidden'
-                />
-                
-                {/* Canvas de rendu */}
-                <canvas
-                  ref={canvasRef}
-                  className='max-h-full max-w-full object-contain'
-                />
+          </>
+        )}
+      </div>
 
-                {/* Overlay de compteur */}
-                {isCounting && (
-                  <div className='absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-20'>
-                    <div className='text-white text-8xl font-bold animate-pulse'>
-                      {countdown}
+      {/* Modal de validation */}
+      {showValidationModal && (
+        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
+          <div className='bg-white rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto'>
+            {saveSuccess ? (
+              /* État de succès */
+              <div className='p-6 text-center'>
+                <div className='w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4'>
+                  <svg className='w-8 h-8 text-green-600' fill='currentColor' viewBox='0 0 20 20'>
+                    <path fillRule='evenodd' d='M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z' clipRule='evenodd' />
+                  </svg>
+                </div>
+                <h3 className='text-lg font-semibold text-gray-900 mb-2'>✅ Sauvegardé !</h3>
+                <p className='text-gray-600 text-sm mb-1'>Votre selfie a été enregistré avec succès.</p>
+                {formData.phone && (
+                  <p className='text-blue-600 text-sm'>📱 Un SMS avec le lien a été envoyé au {formData.phone}</p>
+                )}
+                {formData.email && (
+                  <p className='text-blue-600 text-sm'>✉️ Un email sera envoyé à {formData.email}</p>
+                )}
+              </div>
+            ) : (
+              /* Formulaire de validation */
+              <>
+                {/* Header */}
+                <div className='p-4 border-b border-gray-200'>
+                  <div className='flex items-center justify-between'>
+                    <h3 className='text-lg font-semibold text-gray-900'>📤 Finaliser votre selfie</h3>
+                    <button
+                      onClick={closeModal}
+                      disabled={isSaving}
+                      className='text-gray-400 hover:text-gray-600 disabled:opacity-50'
+                    >
+                      <svg className='w-6 h-6' fill='currentColor' viewBox='0 0 20 20'>
+                        <path fillRule='evenodd' d='M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z' clipRule='evenodd' />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Contenu */}
+                <div className='p-4 space-y-4'>
+                  {/* Aperçu de la photo */}
+                  <div className='text-center'>
+                    <img 
+                      src={photo} 
+                      alt="Aperçu" 
+                      className='w-24 h-24 object-cover rounded-lg mx-auto border-2 border-gray-200'
+                    />
+                  </div>
+
+                  {/* QR Code */}
+                  <div className='text-center bg-gray-50 rounded-lg p-4'>
+                    <p className='text-sm text-gray-600 mb-2'>📱 Scannez pour accéder à votre photo</p>
+                    <img 
+                      src={qrCodeUrl} 
+                      alt="QR Code" 
+                      className='w-32 h-32 mx-auto border border-gray-200 rounded'
+                    />
+                  </div>
+
+                  {/* Formulaire */}
+                  <div className='space-y-4'>
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 mb-1'>
+                        📞 Numéro de téléphone
+                      </label>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        placeholder="Ex: 06 12 34 56 78"
+                        disabled={isSaving}
+                        className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:opacity-50'
+                      />
+                    </div>
+
+                    <div>
+                      <label className='block text-sm font-medium text-gray-700 mb-1'>
+                        ✉️ Adresse email
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        placeholder="Ex: vous@exemple.com"
+                        disabled={isSaving}
+                        className='w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:opacity-50'
+                      />
+                    </div>
+
+                    <div className='bg-blue-50 border border-blue-200 rounded-lg p-3'>
+                      <p className='text-xs text-blue-800'>
+                        ℹ️ Renseignez au moins un moyen de contact pour recevoir votre selfie.
+                        {formData.phone && <span className='block mt-1'>📱 Un SMS avec le lien sera envoyé automatiquement</span>}
+                      </p>
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* Contrôles de capture */}
-              <div className='mt-6 flex flex-col items-center gap-6'>
-                {/* Bouton principal de capture */}
-                <button
-                  onClick={() => capturePhoto(0)}
-                  className='bg-white rounded-full p-6 shadow-lg hover:shadow-xl transition-shadow disabled:opacity-50'
-                  aria-label="Prendre une photo instantanée"
-                  disabled={isCounting}
-                >
-                  <AiOutlineCamera className='text-4xl text-gray-700' />
-                </button>
-
-                {/* Boutons de temporisation */}
-                <div className='flex gap-4'>
-                  {[3, 5, 10].map((seconds) => (
-                    <button
-                      key={seconds}
-                      onClick={() => capturePhoto(seconds)}
-                      className='bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50'
-                      disabled={isCounting}
-                    >
-                      {seconds}s
-                    </button>
-                  ))}
                 </div>
-              </div>
-            </div>
-          )}
+
+                {/* Actions */}
+                <div className='p-4 border-t border-gray-200 flex gap-3'>
+                  <button
+                    onClick={closeModal}
+                    disabled={isSaving}
+                    className='flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors disabled:opacity-50'
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving || (!formData.phone && !formData.email)}
+                    className='flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center'
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2'></div>
+                        Sauvegarde...
+                      </>
+                    ) : (
+                      <>
+                        💾 Sauvegarder
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
