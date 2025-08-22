@@ -288,7 +288,7 @@ const Capture = () => {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('Centrez votre visage dans l\'ovale', centerX, centerY + radiusY + 40);
+      ctx.fillText(centerX, centerY + radiusY + 40);
       
       // Point central de référence
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
@@ -576,7 +576,7 @@ const Capture = () => {
         ) : (
           <>
             {/* Zone caméra - Prend la majorité de l'espace */}
-            <div className='flex-1 bg-gray-900 relative flex items-center justify-center overflow-hidden min-h-[40vh]'>
+            <div className='flex-1  relative  m-3 flex items-center justify-center overflow-hidden min-h-[40vh]'>
               {/* Vidéo cachée */}
               <video
                 ref={videoRef}
@@ -591,17 +591,13 @@ const Capture = () => {
                 ref={canvasRef}
                 width={CANVAS_WIDTH}
                 height={CANVAS_HEIGHT}
-                className='max-h-full max-w-full object-contain border border-gray-600 rounded-lg'
+                className='max-h-full max-w-full object-contain borderrounded-lg'
                 style={{
                   aspectRatio: `${CANVAS_WIDTH}/${CANVAS_HEIGHT}`
                 }}
               />
 
-              {/* Toggle guides - Position absolue en haut à droite */}
-              
-              {/* Informations de dimensionnement */}
              
-              {/* Overlay de compteur */}
               {isCounting && (
                 <div className='absolute inset-0 flex items-center justify-center bg-black bg-opacity-80 z-20'>
                   <div className='text-white text-6xl font-bold animate-pulse'>
