@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Camera, RotateCcw, Check, X, Smartphone, Mail, QrCode, Sparkles } from "lucide-react";
+import { Camera, RotateCcw, Check, X, Smartphone, Mail, QrCode, Sparkles, Download } from "lucide-react";
 
 const Capture = () => {
   const videoRef = useRef(null);
@@ -22,6 +22,8 @@ const Capture = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showBackgrounds, setShowBackgrounds] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [captureId, setCaptureId] = useState(null); // Nouvel état pour l'ID de capture
+  const [imageUrl, setImageUrl] = useState(null); // URL de l'image pour téléchargement
 
   // Dimensions standards pour le canvas
   const CANVAS_WIDTH = 1920;
@@ -395,6 +397,9 @@ const Capture = () => {
 
   const retakePhoto = () => {
     setPhoto(null);
+    setCaptureId(null); // Reset l'ID de capture
+    setQrCodeUrl(''); // Reset le QR code
+    setImageUrl(null); // Reset l'URL de l'image
   };
 
   const selectBackground = (backgroundUrl) => {
@@ -409,8 +414,6 @@ const Capture = () => {
 
   const valider = async (e) => {
     console.log("Ouverture du modal de validation");
-    const qrData = `https://selfie.example.com/photo/${Date.now()}`;
-    setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`);
     setShowValidationModal(true);
   };
 
@@ -458,6 +461,12 @@ const Capture = () => {
         const result = await response.json();
         console.log('Sauvegarde réussie:', result);
         
+        // Stocker l'ID de capture et générer le QR code avec l'URL des uploads
+        setCaptureId(result.id);
+        const imageUrl = `https://selfikiosk.duckdns.org/uploads/${result.filename}`;
+        setImageUrl(imageUrl);
+        setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(imageUrl)}`);
+        
         if (formData.phone && result.id) {
           console.log('Envoi du SMS...');
           
@@ -487,12 +496,7 @@ const Capture = () => {
         
         setSaveSuccess(true);
         
-        setTimeout(() => {
-          setShowValidationModal(false);
-          setFormData({ phone: '', email: '' });
-          setPhoto(null);
-          setSaveSuccess(false);
-        }, 2000);
+        // Ne pas fermer automatiquement, laisser l'utilisateur contrôler
       } else {
         const errorText = await response.text();
         console.error('Erreur de sauvegarde:', response.status, errorText);
@@ -511,6 +515,37 @@ const Capture = () => {
       setShowValidationModal(false);
       setFormData({ phone: '', email: '' });
       setSaveSuccess(false);
+      setCaptureId(null);
+      setQrCodeUrl('');
+      setImageUrl(null);
+    }
+  };
+
+  const downloadImage = async () => {
+    if (imageUrl) {
+      try {
+        // Récupérer l'image depuis l'URL
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        
+        // Créer une URL blob locale
+        const blobUrl = URL.createObjectURL(blob);
+        
+        // Créer un élément <a> temporaire pour déclencher le téléchargement
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `selfie_${captureId || Date.now()}.jpeg`;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Nettoyer
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error('Erreur lors du téléchargement:', error);
+        // Fallback: ouvrir l'image dans un nouvel onglet
+        window.open(imageUrl, '_blank');
+      }
     }
   };
 
@@ -711,13 +746,73 @@ const Capture = () => {
                   <Check className='w-10 h-10 text-green-600' />
                 </div>
                 <h3 className='text-2xl font-bold text-gray-900 mb-4'>Sauvegardé ! ✨</h3>
-                <p className='text-gray-600 mb-2'>Votre selfie a été enregistré avec succès.</p>
+                <p className='text-gray-600 mb-4'>Votre selfie a été enregistré avec succès.</p>
+                
+                {/* Afficher les informations d'envoi */}
                 {formData.phone && (
-                  <p className='text-blue-600 font-medium'>📱 SMS envoyé au {formData.phone}</p>
+                  <p className='text-blue-600 font-medium mb-2'>📱 SMS envoyé au {formData.phone}</p>
                 )}
                 {formData.email && (
-                  <p className='text-blue-600 font-medium'>✉️ Email envoyé à {formData.email}</p>
+                  <p className='text-blue-600 font-medium mb-4'>✉️ Email envoyé à {formData.email}</p>
                 )}
+                
+                {/* QR Code section - affiché seulement après sauvegarde */}
+                {qrCodeUrl && (
+                  <div className='bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200/50 mt-6'>
+                    <QrCode className="w-8 h-8 text-blue-600 mx-auto mb-3" />
+                    <p className='text-sm text-blue-800 font-medium mb-4'>
+                      Scannez pour accéder à votre photo
+                    </p>
+                    <div className="bg-white p-3 rounded-xl inline-block shadow-lg">
+                      <img 
+                        src={qrCodeUrl} 
+                        alt="QR Code" 
+                        className='w-40 h-40 mx-auto'
+                      />
+                    </div>
+                    {captureId && (
+                      <p className='text-xs text-blue-600 mt-3 opacity-75'>
+                        ID: {captureId}
+                      </p>
+                    )}
+                    
+                    {/* Bouton de téléchargement */}
+                    {imageUrl && (
+                      <button
+                        onClick={downloadImage}
+                        className='mt-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-lg flex items-center gap-2 mx-auto'
+                      >
+                        <Download className="w-5 h-5" />
+                        Télécharger l'image
+                      </button>
+                    )}
+                  </div>
+                )}
+                
+                <div className='flex gap-4 mt-8'>
+                  <button
+                    onClick={() => {
+                      setShowValidationModal(false);
+                      setFormData({ phone: '', email: '' });
+                      setPhoto(null);
+                      setSaveSuccess(false);
+                      setCaptureId(null);
+                      setQrCodeUrl('');
+                      setImageUrl(null);
+                    }}
+                    className='flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-semibold transition-all shadow-lg flex items-center justify-center gap-2'
+                  >
+                    <Camera className="w-5 h-5" />
+                    Prendre une nouvelle photo
+                  </button>
+                  
+                  <button
+                    onClick={closeModal}
+                    className='px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-semibold transition-colors'
+                  >
+                    Fermer
+                  </button>
+                </div>
               </div>
             ) : (
               <>
@@ -740,16 +835,6 @@ const Capture = () => {
                       src={photo} 
                       alt="Aperçu" 
                       className='w-32 h-32 object-cover rounded-2xl mx-auto border-4 border-white/50 shadow-lg'
-                    />
-                  </div>
-
-                  <div className='text-center bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-200/50'>
-                    <QrCode className="w-8 h-8 text-blue-600 mx-auto mb-3" />
-                    <p className='text-sm text-blue-800 font-medium mb-4'>Scannez pour accéder à votre photo</p>
-                    <img 
-                      src={qrCodeUrl} 
-                      alt="QR Code" 
-                      className='w-32 h-32 mx-auto border-2 border-white rounded-xl shadow-lg'
                     />
                   </div>
 

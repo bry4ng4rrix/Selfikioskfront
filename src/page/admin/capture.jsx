@@ -1,4 +1,4 @@
-import {React ,useState ,useEffect ,useRef} from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash2, Eye, Camera, Calendar, Phone, Mail, Download } from 'lucide-react';
 
 export default function Dashboard() {
@@ -120,33 +120,16 @@ export default function Dashboard() {
     }
   };
 
-  // Fonction pour construire l'URL de l'image
+  // Fonction pour construire l'URL de l'image via l'API
   const getImageUrl = (capture) => {
-    // Le backend génère photo_remote_url comme "/uploads/{capture_id}.jpg"
-    if (capture.photo_remote_url) {
-      if (capture.photo_remote_url.startsWith('/uploads/')) {
-        return `http://localhost:8000${capture.photo_remote_url}`;
-      }
-      if (capture.photo_remote_url.startsWith('/')) {
-        return `http://localhost:8000${capture.photo_remote_url}`;
-      }
-      return capture.photo_remote_url;
+    if (!capture.id) {
+     
+      return null;
     }
     
-    // Fallback vers photo_local_path
-    if (capture.photo_local_path) {
-      // Si le chemin complet /var/www/html/uploads/filename.jpg
-      if (capture.photo_local_path.includes('/var/www/html/uploads/')) {
-        const filename = capture.photo_local_path.split('/').pop();
-        return `http://localhost:8000/uploads/${filename}`;
-      }
-      // Si c'est déjà un chemin relatif
-      if (!capture.photo_local_path.startsWith('/')) {
-        return `http://localhost:8000/uploads/${capture.photo_local_path}`;
-      }
-    }
-    
-    return null;
+    const url = capture.photo_remote_url;
+   
+    return url;
   };
 
   // Fonction pour formater la date
@@ -162,45 +145,105 @@ export default function Dashboard() {
   };
 
   // Fonction pour télécharger l'image avec authentification
-  const downloadImage = (capture) => {
+  const downloadImage = async (capture) => {
     const imageUrl = getImageUrl(capture);
-    if (imageUrl) {
-      // Créer un lien de téléchargement avec token si nécessaire
+    if (!imageUrl) {
+      console.error('Impossible de générer l\'URL de l\'image');
+      alert('Impossible de télécharger l\'image');
+      return;
+    }
+
+    try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        console.error('Token d\'authentification manquant');
+        alert('Token d\'authentification manquant');
+        return;
+      }
+
+      console.log('Téléchargement de l\'image:', imageUrl);
       
-      if (token && imageUrl.includes('localhost:8000')) {
-        // Pour les images du serveur local, ajouter le token dans les headers via fetch
-        fetch(imageUrl, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        })
-        .then(response => response.blob())
-        .then(blob => {
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `capture_${capture.id}.jpg`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-        })
-        .catch(error => {
-          console.error('Erreur lors du téléchargement:', error);
-          alert('Erreur lors du téléchargement de l\'image');
-        });
-      } else {
-        // Pour les autres images, téléchargement direct
+      const response = await fetch(imageUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = imageUrl;
-        link.download = `capture_${capture.id}.jpg`;
-        link.target = '_blank';
+        link.href = url;
+        link.download = `capture_${capture.id.slice(-8)}.jpg`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        console.log('✅ Téléchargement réussi');
+      } else {
+        console.error('Erreur lors du téléchargement:', response.status);
+        alert('Erreur lors du téléchargement de l\'image');
       }
+    } catch (error) {
+      console.error('Erreur lors du téléchargement:', error);
+      alert('Erreur lors du téléchargement de l\'image');
     }
+  };
+
+  // Composant pour afficher l'image avec gestion des erreurs
+  const CaptureImage = ({ capture }) => {
+    const [imageError, setImageError] = useState(false);
+    const [imageLoading, setImageLoading] = useState(true);
+    
+    const imageUrl = getImageUrl(capture);
+    const token = localStorage.getItem('token');
+
+    useEffect(() => {
+      setImageError(false);
+      setImageLoading(true);
+    }, [capture.id]);
+
+    const handleImageError = (e) => {
+      console.error('❌ Erreur de chargement image pour capture:', capture.id);
+      setImageError(true);
+      setImageLoading(false);
+    };
+
+    const handleImageLoad = () => {
+      console.log('✅ Image chargée avec succès pour capture:', capture.id);
+      setImageLoading(false);
+    };
+
+    if (!imageUrl || imageError) {
+      return (
+        <div className="text-center flex flex-col items-center justify-center h-full">
+          <div className="w-12 h-12 bg-gray-300 rounded-lg mx-auto mb-2 flex items-center justify-center">
+            <Camera className="w-6 h-6 text-gray-500" />
+          </div>
+          <span className="text-gray-500 text-sm">Capture</span>
+          <span className="text-gray-400 text-xs mt-1">Image indisponible</span>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {imageLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-200">
+            <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600"></div>
+          </div>
+        )}
+        <img
+          src={`${imageUrl}?token=${token}`}
+          alt={`Capture ${capture.id}`}
+          className="w-full h-full object-cover"
+          onError={handleImageError}
+          onLoad={handleImageLoad}
+          style={{ display: imageLoading ? 'none' : 'block' }}
+        />
+      </>
+    );
   };
 
   return (
@@ -229,7 +272,6 @@ export default function Dashboard() {
               <Camera className="w-4 h-4 mr-2" />
               {isLoading ? 'Chargement...' : 'Actualiser'}
             </button>
-           
           </div>
         </div>
 
@@ -281,36 +323,11 @@ export default function Dashboard() {
         {/* Captures Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {captures.map((capture) => {
-            const imageUrl = getImageUrl(capture);
-            
             return (
               <div key={capture.id} className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                 {/* Image Preview */}
                 <div className="aspect-square bg-gray-200 flex items-center justify-center relative overflow-hidden group">
-                  {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt={`Capture ${capture.id}`}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        console.error('Erreur de chargement image:', imageUrl);
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'flex';
-                      }}
-                    />
-                  ) : null}
-                  
-                  {/* Fallback si pas d'image */}
-                  <div 
-                    className={`text-center ${imageUrl ? 'hidden' : 'flex'} flex-col items-center justify-center h-full`}
-                    style={{ display: imageUrl ? 'none' : 'flex' }}
-                  >
-                    <div className="w-12 h-12 bg-gray-300 rounded-lg mx-auto mb-2 flex items-center justify-center">
-                      <Camera className="w-6 h-6 text-gray-500" />
-                    </div>
-                    <span className="text-gray-500 text-sm">Capture</span>
-                    <span className="text-gray-400 text-xs mt-1">Image indisponible</span>
-                  </div>
+                  <CaptureImage capture={capture} />
                   
                   {/* Action Buttons */}
                   <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -376,7 +393,7 @@ export default function Dashboard() {
                     <div>Background ID: {capture.background_id || 'Aucun'}</div>
                     <div>Tentatives sync: {capture.sync_attempts}</div>
                     <div title={capture.photo_local_path}>Path: {capture.photo_local_path ? capture.photo_local_path.split('/').pop() : 'N/A'}</div>
-                    <div>URL: {getImageUrl(capture) ? '✓' : '❌'}</div>
+                    <div>API: {getImageUrl(capture) ? '✓' : '❌'}</div>
                   </div>
                   
                   {/* Actions */}
@@ -447,13 +464,9 @@ export default function Dashboard() {
                     {/* Aperçu de la capture à supprimer */}
                     <div className="bg-gray-100 rounded-lg p-3 mb-3">
                       <div className="flex items-center space-x-3">
-                        {getImageUrl(deleteModal.capture) && (
-                          <img
-                            src={getImageUrl(deleteModal.capture)}
-                            alt={`Capture ${deleteModal.capture.id}`}
-                            className="w-16 h-16 object-cover rounded"
-                          />
-                        )}
+                        <div className="w-16 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                          <CaptureImage capture={deleteModal.capture} />
+                        </div>
                         <div className="flex-1">
                           <p className="font-medium text-gray-900">
                             Capture #{deleteModal.capture.id.slice(-8)}
@@ -509,5 +522,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-// Fonction supprimée car elle est maintenant définie dans le composant
