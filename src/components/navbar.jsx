@@ -52,7 +52,7 @@ const Navbar = () => {
     // Vérification périodique de la connectivité
     const checkConnectivity = async () => {
       try {
-        const response = await fetch('/api/health-check', {
+        const response = await fetch('/api/health', {
           method: 'HEAD',
           cache: 'no-cache'
         });

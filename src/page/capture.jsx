@@ -21,6 +21,7 @@ const Capture = () => {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showBackgrounds, setShowBackgrounds] = useState(false);
+  const [notification, setNotification] = useState(null);
 
   // Dimensions standards pour le canvas
   const CANVAS_WIDTH = 1920;
@@ -516,7 +517,20 @@ const Capture = () => {
   return (
     <div className='min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex flex-col'>
       {/* Header Modern */}
-      
+      <div className='bg-white/80 backdrop-blur-sm shadow-lg border-b border-white/20 p-4 flex-shrink-0'>
+        <div className='flex justify-between items-center max-w-7xl mx-auto'>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+              <Camera className='w-6 h-6 text-white' />
+            </div>
+            
+          </div>
+          <a href="/" className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-6 py-2 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-lg">
+            ← Retour
+          </a>
+        </div>
+      </div>
+
       {/* Contenu principal */}
       <div className='flex-1 flex flex-col overflow-hidden'>
         
@@ -593,66 +607,6 @@ const Capture = () => {
             {/* Contrôles modernes */}
             <div className='bg-white/80 backdrop-blur-sm border-t border-white/20 p-6 flex-shrink-0 shadow-lg'>
               <div className='max-w-7xl mx-auto'>
-                {/* Fonds d'écran */}
-                <div className='mb-6'>
-                  <button
-                    onClick={() => setShowBackgrounds(!showBackgrounds)}
-                    className='flex items-center gap-2 text-gray-700 font-semibold mb-4 hover:text-blue-600 transition-colors'
-                  >
-                    <Sparkles className="w-5 h-5" />
-                    Fonds personnalisés ({allBackgrounds.length})
-                    <span className={`transform transition-transform ${showBackgrounds ? 'rotate-180' : ''}`}>⌄</span>
-                  </button>
-                  
-                  {showBackgrounds && (
-                    <div className='bg-white/50 rounded-2xl p-4 border border-white/30'>
-                      <div className='grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3'>
-                        {allBackgrounds.map((bg) => (
-                          <button
-                            key={bg.id}
-                            onClick={() => selectBackground(bg.url)}
-                            className={`relative overflow-hidden rounded-xl border-3 transition-all duration-300 hover:scale-105 ${
-                              selectedBackground === bg.url 
-                                ? 'border-blue-500 shadow-lg ring-4 ring-blue-200' 
-                                : 'border-gray-300 hover:border-blue-300 hover:shadow-md'
-                            }`}
-                          >
-                            {bg.url ? (
-                              <div className='aspect-square'>
-                                <img 
-                                  src={bg.url} 
-                                  alt={bg.name}
-                                  className='w-full h-full object-cover'
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.nextSibling.style.display = 'flex';
-                                  }}
-                                />
-                                <div className='w-full h-full bg-gradient-to-br from-gray-300 to-gray-400 hidden items-center justify-center'>
-                                  <X className="w-6 h-6 text-gray-600" />
-                                </div>
-                              </div>
-                            ) : (
-                              <div className='aspect-square bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center'>
-                                <span className='text-white text-sm font-semibold'>Original</span>
-                              </div>
-                            )}
-                            
-                            {selectedBackground === bg.url && (
-                              <div className='absolute top-1 right-1 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg'>
-                                <Check className="w-3 h-3" />
-                              </div>
-                            )}
-                            
-                            <div className='absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center truncate'>
-                              {bg.name}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
 
                 {/* Boutons de capture */}
                 <div className='flex items-center justify-center gap-4'>
@@ -680,9 +634,67 @@ const Capture = () => {
                     <Camera className='w-10 h-10 text-white' />
                   </button>
                   
-                  {/* Espace équilibré */}
-                  <div className='w-[152px]'></div>
+                  {/* Sélection des fonds à droite */}
+                  <div className='w-[152px]'>
+                    <button
+                      onClick={() => setShowBackgrounds(!showBackgrounds)}
+                      className='bg-white/70 hover:bg-white/90 text-gray-700 font-semibold py-3 px-4 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg border border-white/30 flex items-center gap-2 w-full justify-center'
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Fonds
+                    </button>
+                  </div>
                 </div>
+                
+                {/* Panneau des fonds d'écran (affiché sous les boutons quand ouvert) */}
+                {showBackgrounds && (
+                  <div className='mt-4 bg-white/50 rounded-2xl p-4 border border-white/30'>
+                    <div className='grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-3'>
+                      {allBackgrounds.map((bg) => (
+                        <button
+                          key={bg.id}
+                          onClick={() => selectBackground(bg.url)}
+                          className={`relative overflow-hidden rounded-xl border-3 transition-all duration-300 hover:scale-105 ${
+                            selectedBackground === bg.url 
+                              ? 'border-blue-500 shadow-lg ring-4 ring-blue-200' 
+                              : 'border-gray-300 hover:border-blue-300 hover:shadow-md'
+                          }`}
+                        >
+                          {bg.url ? (
+                            <div className='aspect-square'>
+                              <img 
+                                src={bg.url} 
+                                alt={bg.name}
+                                className='w-full h-full object-cover'
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                              <div className='w-full h-full bg-gradient-to-br from-gray-300 to-gray-400 hidden items-center justify-center'>
+                                <X className="w-6 h-6 text-gray-600" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className='aspect-square bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center'>
+                              <span className='text-white text-sm font-semibold'>Original</span>
+                            </div>
+                          )}
+                          
+                          {selectedBackground === bg.url && (
+                            <div className='absolute top-1 right-1 bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg'>
+                              <Check className="w-3 h-3" />
+                            </div>
+                          )}
+                          
+                          <div className='absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center truncate'>
+                            {bg.name}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </>
