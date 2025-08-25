@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [showPasswords, setShowPasswords] = useState({});
   const [smsTestData, setSmsTestData] = useState({
     capture_id: '44c3acab-df5e-4556-96d7-f442fd861f48',
-    phone: '+261383572066'
+    phone: '+33667945730'
   });
 
   // Champs sensibles à masquer par défaut
@@ -43,7 +43,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/admin/config', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/config', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -74,7 +74,7 @@ export default function Dashboard() {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const response = await fetch('http://localhost:8000/admin/test/vps', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/test/vps', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -115,7 +115,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/admin/config', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/config', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -152,7 +152,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/admin/config/sync', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/config/sync', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -197,7 +197,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/admin/test/sms', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/test/sms', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

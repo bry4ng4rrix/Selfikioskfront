@@ -21,7 +21,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/admin/captures', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/captures', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -68,7 +68,7 @@ export default function Dashboard() {
 
       console.log('Envoi de la requête DELETE...');
       
-      const response = await fetch(`http://localhost:8000/admin/captures/${captureId}`, {
+      const response = await fetch(`https://selfikiosk.duckdns.org/api/admin/captures/${captureId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

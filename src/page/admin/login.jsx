@@ -23,7 +23,7 @@ const Login = () => {
     setIsLoading(true);
     
     try {
-      const response = await fetch('http://localhost:8000/admin/login', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

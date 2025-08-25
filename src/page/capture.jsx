@@ -35,7 +35,7 @@ const Capture = () => {
   useEffect(() => {
     const fetchBackgrounds = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/backgrounds');
+        const response = await fetch('https://selfikiosk.duckdns.org/api/api/backgrounds');
         if (response.ok) {
           const data = await response.json();
           console.log('Fonds d\'écran récupérés:', data);
@@ -45,7 +45,7 @@ const Capture = () => {
             .map(bg => ({
               id: bg.id,
               name: bg.name,
-              url: `http://localhost:8000/${bg.file_path}`,
+              url: `https://selfikiosk.duckdns.org/api/${bg.file_path}`,
               type: 'api'
             }));
           
@@ -92,7 +92,7 @@ const Capture = () => {
     }
   }, [allBackgrounds.length]);
 
-  // Fonction pour traiter le fond en temps réel avec détection améliorée
+  // Fonction améliorée pour la suppression de fond précise
   const processFrame = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) {
       if (animationRef.current) {
@@ -112,13 +112,16 @@ const Capture = () => {
       if (isBackgroundEnabled && selectedBackground && backgroundImages[selectedBackground]) {
         const backgroundImg = backgroundImages[selectedBackground];
         
+        // Dessiner le fond
         ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
 
+        // Créer un canvas temporaire pour traiter la vidéo
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
         
+        // Calculer les dimensions pour maintenir le ratio
         const videoRatio = video.videoWidth / video.videoHeight;
         const canvasRatio = canvas.width / canvas.height;
         
@@ -138,6 +141,7 @@ const Capture = () => {
         
         tempCtx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
         
+        // Traitement pixel par pixel pour la suppression de fond précise
         const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
         const data = imageData.data;
 
@@ -146,43 +150,90 @@ const Capture = () => {
           const g = data[i + 1];
           const b = data[i + 2];
           
+          // Algorithme de détection de fond amélioré
+          let isBackground = false;
+          
+          // Détection des tons uniformes (murs blancs, gris, etc.)
+          const grayLevel = (r + g + b) / 3;
+          const colorVariance = Math.max(
+            Math.abs(r - grayLevel),
+            Math.abs(g - grayLevel),
+            Math.abs(b - grayLevel)
+          );
+          
+          // Condition 1: Pixels très clairs (blancs/très clairs)
+          if (r > 200 && g > 200 && b > 200 && colorVariance < 30) {
+            isBackground = true;
+          }
+          
+          // Condition 2: Pixels très sombres (noirs/très sombres)
+          else if (r < 50 && g < 50 && b < 50) {
+            isBackground = true;
+          }
+          
+          // Condition 3: Tons gris uniformes
+          else if (colorVariance < 20 && grayLevel > 120 && grayLevel < 200) {
+            isBackground = true;
+          }
+          
+          // Condition 4: Couleurs très saturées et uniformes (fonds colorés unis)
+          else if (colorVariance < 15 && (
+            (g > r + 40 && g > b + 40) || // Verts dominants
+            (b > r + 40 && b > g + 40) || // Bleus dominants
+            (r > g + 40 && r > b + 40)    // Rouges dominants
+          )) {
+            isBackground = true;
+          }
+          
+          // Condition 5: Détection des zones de transition floues (amélioration des contours)
           const pixelIndex = Math.floor(i / 4);
           const x = pixelIndex % canvas.width;
           const y = Math.floor(pixelIndex / canvas.width);
           
-          const isEdgeZone = (
-            x < canvas.width * 0.1 ||
-            x > canvas.width * 0.9 ||
-            y < canvas.height * 0.1 ||
-            y > canvas.height * 0.9
-          );
-          
-          let isBackground = false;
-          
-          if (isEdgeZone) {
-            isBackground = (
-              (r > 180 && g > 180 && b > 180) ||
-              (r < 60 && g < 60 && b < 60) ||
-              (Math.abs(r - g) < 40 && Math.abs(g - b) < 40 && Math.abs(r - b) < 40)
-            );
-          } else {
-            isBackground = (
-              (r > 200 && g > 200 && b > 200) ||
-              (r < 40 && g < 40 && b < 40) ||
-              (Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25 && r > 160) ||
-              (g > r + 50 && g > b + 50 && g > 100) ||
-              (b > r + 50 && b > g + 50 && b > 100)
-            );
+          // Analyse des pixels voisins pour affiner la détection
+          if (!isBackground && (x > 1 && x < canvas.width - 2 && y > 1 && y < canvas.height - 2)) {
+            let backgroundNeighbors = 0;
+            const checkRadius = 2;
+            
+            for (let dx = -checkRadius; dx <= checkRadius; dx++) {
+              for (let dy = -checkRadius; dy <= checkRadius; dy++) {
+                if (dx === 0 && dy === 0) continue;
+                
+                const neighborIndex = ((y + dy) * canvas.width + (x + dx)) * 4;
+                if (neighborIndex >= 0 && neighborIndex < data.length) {
+                  const nr = data[neighborIndex];
+                  const ng = data[neighborIndex + 1];
+                  const nb = data[neighborIndex + 2];
+                  const na = data[neighborIndex + 3];
+                  
+                  if (na === 0 || // Déjà marqué comme fond
+                      (nr > 190 && ng > 190 && nb > 190) || // Blanc
+                      (nr < 60 && ng < 60 && nb < 60)) { // Noir
+                    backgroundNeighbors++;
+                  }
+                }
+              }
+            }
+            
+            // Si plus de la moitié des voisins sont du fond, considérer comme fond
+            if (backgroundNeighbors > (checkRadius * 2 + 1) * (checkRadius * 2 + 1) * 0.6) {
+              isBackground = true;
+            }
           }
 
+          // Appliquer la transparence si c'est du fond
           if (isBackground) {
-            data[i + 3] = 0;
+            data[i + 3] = 0; // Alpha = 0 (transparent)
           }
         }
 
+        // Appliquer les modifications
         tempCtx.putImageData(imageData, 0, 0);
+        
+        // Dessiner le résultat final sur le canvas principal
         ctx.drawImage(tempCanvas, 0, 0);
       } else {
+        // Mode normal sans fond personnalisé
         const videoRatio = video.videoWidth / video.videoHeight;
         const canvasRatio = canvas.width / canvas.height;
         
@@ -205,33 +256,25 @@ const Capture = () => {
         ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
       }
       
-      if (showGuides) {
-        drawGuides(ctx, canvas.width, canvas.height);
+      // Dessiner les guides uniquement si activés et pas en comptage
+      if (showGuides && !isCounting) {
+        drawSimpleGuides(ctx, canvas.width, canvas.height);
       }
     }
 
     animationRef.current = requestAnimationFrame(processFrame);
-  }, [isBackgroundEnabled, selectedBackground, backgroundImages, showGuides]);
+  }, [isBackgroundEnabled, selectedBackground, backgroundImages, showGuides, isCounting]);
 
-  const drawGuides = (ctx, width, height) => {
+  // Guides simplifiés sans ovale
+  const drawSimpleGuides = (ctx, width, height) => {
     ctx.save();
     
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const radiusX = width * 0.12;
-    const radiusY = height * 0.18;
-    
-    ctx.beginPath();
-    ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([15, 10]);
-    ctx.stroke();
-    
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    // Lignes de règle des tiers seulement
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 1;
-    ctx.setLineDash([3, 12]);
+    ctx.setLineDash([5, 10]);
     
+    // Lignes verticales
     ctx.beginPath();
     ctx.moveTo(width / 3, 0);
     ctx.lineTo(width / 3, height);
@@ -239,6 +282,7 @@ const Capture = () => {
     ctx.lineTo(2 * width / 3, height);
     ctx.stroke();
     
+    // Lignes horizontales
     ctx.beginPath();
     ctx.moveTo(0, height / 3);
     ctx.lineTo(width, height / 3);
@@ -246,18 +290,11 @@ const Capture = () => {
     ctx.lineTo(width, 2 * height / 3);
     ctx.stroke();
     
-    if (!isCounting) {
-      ctx.font = `${Math.max(16, width * 0.025)}px Arial, sans-serif`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Positionnez votre visage dans l\'ovale', centerX, centerY + radiusY + 40);
-      
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, 3, 0, 2 * Math.PI);
-      ctx.fill();
-    }
+    // Point central discret
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.beginPath();
+    ctx.arc(width / 2, height / 2, 2, 0, 2 * Math.PI);
+    ctx.fill();
     
     ctx.restore();
   };
@@ -408,7 +445,7 @@ const Capture = () => {
 
       console.log('Envoi des données:', { ...captureData, photo_base64: 'base64_truncated...' });
 
-      const response = await fetch('http://localhost:8000/api/capture', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/api/capture', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -424,7 +461,7 @@ const Capture = () => {
           console.log('Envoi du SMS...');
           
           try {
-            const smsResponse = await fetch('http://localhost:8000/api/send-sms', {
+            const smsResponse = await fetch('https://selfikiosk.duckdns.org/api/api/send-sms', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -479,22 +516,7 @@ const Capture = () => {
   return (
     <div className='min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex flex-col'>
       {/* Header Modern */}
-      <div className='bg-white/80 backdrop-blur-sm shadow-lg border-b border-white/20 p-4 flex-shrink-0'>
-        <div className='flex justify-between items-center max-w-7xl mx-auto'>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-              <Camera className='w-6 h-6 text-white' />
-            </div>
-            <h1 className='text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent'>
-              SelfieKiosk
-            </h1>
-          </div>
-          <a href="/" className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-6 py-2 rounded-xl font-semibold transition-all duration-300 hover:scale-105 shadow-lg">
-            ← Retour
-          </a>
-        </div>
-      </div>
-
+      
       {/* Contenu principal */}
       <div className='flex-1 flex flex-col overflow-hidden'>
         

@@ -17,7 +17,7 @@ export default function Dashboard() {
   const fetchBackgrounds = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('http://localhost:8000/api/backgrounds');
+      const response = await fetch('https://selfikiosk.duckdns.org/api/api/backgrounds');
       if (response.ok) {
         const data = await response.json();
         console.log('Données brutes récupérées:', data); // Debug
@@ -94,7 +94,7 @@ export default function Dashboard() {
       formData.append('display_order', wallpapers.length + 1);
       formData.append('file', file);
 
-      const response = await fetch('http://localhost:8000/admin/backgrounds', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/backgrounds', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -153,7 +153,7 @@ export default function Dashboard() {
 
       console.log('Envoi de la requête DELETE...'); // Debug
       
-      const response = await fetch(`http://localhost:8000/admin/backgrounds/${backgroundId}`, {
+      const response = await fetch(`https://selfikiosk.duckdns.org/api/admin/backgrounds/${backgroundId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -214,7 +214,7 @@ export default function Dashboard() {
     // Priorité au file_path (nouveau format)
     if (wallpaper.file_path) {
       // Construire l'URL complète avec le serveur
-      return `http://localhost:8000/${wallpaper.file_path}`;
+      return `https://selfikiosk.duckdns.org/api/${wallpaper.file_path}`;
     }
     
     // Fallback vers les autres propriétés possibles
@@ -325,7 +325,7 @@ export default function Dashboard() {
         {wallpapers.length > 0 && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-yellow-800 text-sm">
-              Debug: {wallpapers.length} fond(s) d'écran trouvé(s)
+             {wallpapers.length} fond(s) d'écran trouvé(s)
             </p>
           </div>
         )}

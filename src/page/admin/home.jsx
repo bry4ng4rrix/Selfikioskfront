@@ -41,7 +41,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/admin/stats', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/stats', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -79,7 +79,7 @@ export default function Dashboard() {
     try {
       setHealthLoading(true);
       
-      const response = await fetch('http://localhost:8000/health', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/health', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -125,7 +125,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/admin/sync', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/sync', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -221,7 +221,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('http://localhost:8000/admin/cleanup', {
+      const response = await fetch('https://selfikiosk.duckdns.org/api/admin/cleanup', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -473,7 +473,7 @@ export default function Dashboard() {
             <h3 className="text-gray-900 text-lg font-semibold mb-6">Actions rapides</h3>
             <div className="space-y-3">
               <button 
-                onClick={refreshStats}
+                onClick={syncDatabase}
                 disabled={isLoading}
                 className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-400 text-white py-3 px-4 rounded-lg font-medium transition-colors flex items-center justify-center"
               >
